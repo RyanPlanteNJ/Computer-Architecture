@@ -11,7 +11,10 @@ PUSH = 0b01000101
 POP = 0b01000110
 CALL = 0b01010000
 RET = 0b00010001
-
+JMP = 0b01010100
+JEQ = 0b01010101
+JNE = 0b01010110
+CMP = 0b10100111
 
 class CPU:
     """Main CPU class."""
@@ -82,7 +85,13 @@ class CPU:
             self.reg[reg_a] += self.reg[reg_b]
         elif op == MUL:
             self.reg[reg_a] *= self.reg[reg_b]
-        #elif op == "SUB": etc
+        elif op == CMP:
+            if self.reg[reg_a] == self.reg[reg_b]:
+                self.fl = self.fl | 1
+            elif self.reg[reg_a] > self.reg[reg_b]:
+                self.fl = self.fl | 2
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                self.fl = self.fl | 4
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -139,6 +148,27 @@ class CPU:
             elif command_to_execute == RET:
                 self.pc = self.ram[self.reg[self.sp]]
                 self.reg[self.sp] += 1
+            elif command_to_execute == CMP:
+                self.alu(command_to_execute, task_1, task_2)
+                self.pc += 3 
+            elif command_to_execute == JMP:
+                self.reg[self.sp]  -= 1
+                self.ram[self.reg[self.sp]] = self.pc + 2
+                self.pc = self.reg[task_1]
+            elif command_to_execute == JEQ:                
+                if self.fl == 1 or self.fl == 3 or self.fl == 5 or self.fl == 7:
+                    self.reg[self.sp] -= 1
+                    self.ram[self.reg[self.sp]] = self.pc + 2
+                    self.pc = self.reg[task_1]
+                else: 
+                    self.pc += 2
+            elif command_to_execute == JNE:
+                if self.fl == 0 or self.fl == 2 or self.fl == 3 or self.fl == 4:
+                    self.reg[self.sp] -= 1
+                    self.ram[self.reg[self.sp]] = self.pc + 2
+                    self.pc = self.reg[task_1]
+                else:
+                    self.pc += 2
             elif command_to_execute == HLT:
                 self.running = False
                 self.pc += 1
