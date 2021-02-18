@@ -2,41 +2,96 @@
 
 import sys
 
+HLT = 0b00000001
+LDI = 0b10000010
+PRN = 0b01000111
+MUL = 0b10100010
+ADD = 0b10100000
+PUSH = 0b01000101
+POP = 0b01000110
+CALL = 0b01010000
+RET = 0b00010001
+JMP = 0b01010100
+JEQ = 0b01010101
+JNE = 0b01010110
+CMP = 0b10100111
+
 class CPU:
     """Main CPU class."""
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        #Add list properties to 'CPU' class to hold 256 bytes of memory
+        self.ram = [0b00000000] * 256
+        #and 8 general purpose registers:
+        self.reg = [0b00000000] * 8
+        self.reg[7] = 0xF4
+        #R0
+        #R1
+        #R2
+        #R3
+        #R4
+        #R5 reserved as the interrupt mask (IM)
+        #R6 reserved as the interrupt status (IS)
+        #R7 reserved as the stack pointer (SP)
+
+        #Internal Registers
+        #PC: Program Counter, current executed instruction
+        self.pc = 0
+        #IR: Instruction Register, constains the current executed instructions
+        #FL: Flags
+        self.fl = 0
+        self.sp = 7
+        self.running = True
+    
+    #'ram_read()' should accept the address to read and return value stored
+    def ram_read(self, address):
+        return self.ram[address]
+
+    #'ram_write()' should accept a value to write, and the address to write it to.
+    def ram_write(self, address, val):
+        self.ram[address] = val
 
     def load(self):
         """Load a program into memory."""
 
-        address = 0
+        if len(sys.argv) != 2:
+            print("Need file name!")
+            sys.exit(1)
+        try:
+            address = 0
+            with open(sys.argv[1]) as f:
+                for line in f:
+                    comment_split = line.split("#")
+                    value = comment_split[0].strip()
+                    if value == "":
+                        continue
+                    num = int(value, 2)
+                    #print(f"{num:08b}: {num}")
+                    #print(value)
+                    self.ram[address] = num
+                    #print(address)
+                    address += 1
 
-        # For now, we've just hardcoded a program:
-
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
-
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        except FileNotFoundError:
+            print("File not found!")
+            sys.exit(2)
 
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
 
-        if op == "ADD":
+        if op == ADD:
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+        elif op == MUL:
+            self.reg[reg_a] *= self.reg[reg_b]
+        elif op == CMP:
+            if self.reg[reg_a] == self.reg[reg_b]:
+                self.fl = self.fl | 1
+            elif self.reg[reg_a] > self.reg[reg_b]:
+                self.fl = self.fl | 2
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                self.fl = self.fl | 4
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -62,4 +117,62 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+        while self.running:
+            task_1 = self.ram_read(self.pc + 1)
+            task_2 = self.ram_read(self.pc + 2)
+            command_to_execute = self.ram_read(self.pc)
+            if command_to_execute == LDI:
+                self.reg[task_1] = task_2
+                self.pc += 3
+            elif command_to_execute == PRN:
+                print(self.reg[task_1])
+                self.pc += 2
+            elif command_to_execute == ADD:
+                self.alu(command_to_execute, task_1, task_2)
+                self.pc += 3
+            elif command_to_execute == MUL:
+                self.alu(command_to_execute, task_1, task_2)
+                self.pc += 3
+            elif command_to_execute == PUSH:
+                self.reg[self.sp] -=1
+                self.ram[self.reg[self.sp]] = self.reg[task_1]
+                self.pc += 2
+            elif command_to_execute == POP:
+                self.reg[task_1] = self.ram[self.reg[self.sp]]
+                self.reg[self.sp] += 1
+                self.pc += 2
+            elif command_to_execute == CALL:
+                self.reg[self.sp]  -= 1
+                self.ram[self.reg[self.sp]] = self.pc + 2
+                self.pc = self.reg[task_1]
+            elif command_to_execute == RET:
+                self.pc = self.ram[self.reg[self.sp]]
+                self.reg[self.sp] += 1
+            elif command_to_execute == CMP:
+                self.alu(command_to_execute, task_1, task_2)
+                self.pc += 3 
+            elif command_to_execute == JMP:
+                self.reg[self.sp]  -= 1
+                self.ram[self.reg[self.sp]] = self.pc + 2
+                self.pc = self.reg[task_1]
+            elif command_to_execute == JEQ:                
+                if self.fl == 1 or self.fl == 3 or self.fl == 5 or self.fl == 7:
+                    self.reg[self.sp] -= 1
+                    self.ram[self.reg[self.sp]] = self.pc + 2
+                    self.pc = self.reg[task_1]
+                else: 
+                    self.pc += 2
+            elif command_to_execute == JNE:
+                if self.fl == 0 or self.fl == 2 or self.fl == 3 or self.fl == 4:
+                    self.reg[self.sp] -= 1
+                    self.ram[self.reg[self.sp]] = self.pc + 2
+                    self.pc = self.reg[task_1]
+                else:
+                    self.pc += 2
+            elif command_to_execute == HLT:
+                self.running = False
+                self.pc += 1
+                    
+
+
+
